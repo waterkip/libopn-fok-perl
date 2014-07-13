@@ -1,14 +1,14 @@
 package OPN::Fok::UA;
 use Moose;
 
-use LWP::UserAgent;
-use HTTP::Request;
-use HTTP::Response;
+use HTML::Entities;
+use HTML::TreeBuilder;
 use HTTP::Cookies;
 use HTTP::Date;
+use HTTP::Request;
+use HTTP::Response;
+use LWP::UserAgent;
 use URI;
-use HTML::Entities;
-use Data::Dumper;
 
 has ua => (
     is      => 'ro',
@@ -241,7 +241,6 @@ sub parse_forum {
     my $url = $self->_get_uri("forum/$id");
     my $content = $self->request_ok(HTTP::Request->new("GET", $url));
 
-    use HTML::TreeBuilder;
     my $builder = HTML::TreeBuilder->new();
     $builder->parse_content($content);
 

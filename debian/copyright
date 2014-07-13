@@ -1,0 +1,16 @@
+Format-Specification: http://anonscm.debian.org/viewvc/dep/web/deps/dep5.mdwn?view=markup&pathrev=135
+Maintainer: Wesley Schwengle
+        Mintlab B.V.
+        wesley@mintlab.nl
+        http://mintlab.nl
+Source: https://bitbucket.org/mintlab/zaaksysteem-saas
+Name: Zaaksysteem-SaaS
+Files: *
+Copyright: Mintlab B.V.
+        info@mintlab.nl
+        http://mintlab.nl
+License: None.
+    
+Files: debian/*
+Copyright: 2014, Wesley Schwengle <wesley@schwengle.net>
+License: None.

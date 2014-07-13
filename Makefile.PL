@@ -1,7 +1,4 @@
 use ExtUtils::MakeMaker;
-use File::ShareDir::Install;
-
-install_share 'tt';
 
 WriteMakefile(
     NAME          => 'OPN::Fok::RSS',
@@ -17,19 +14,14 @@ WriteMakefile(
         'Test::Pod::Coverage' => 0,
     },
     PREREQ_PM => {
-        'Digest::SHA'                    => 0,
-        'File::Copy'                     => 0,
-        'File::Spec::Functions'          => 0,
-        'File::Temp'                     => 0,
-        'Getopt::Long'                   => 0,
-        'JSON'                           => 0,
-        'Moose'                          => 0,
-        'Pod::Usage'                     => 0,
-        'Template'                       => 0,
-        'Cache::Memcached::libmemcached' => 0,
+        'Moose'             => 0,
+        'HTML::Entities'    => 0,
+        'HTML::TreeBuilder' => 0,
+        'HTTP::Cookies'     => 0,
+        'HTTP::Date'        => 0,
+        'HTTP::Request'     => 0,
+        'HTTP::Response'    => 0,
+        'LWP::UserAgent'    => 0,
     },
-    EXE_FILES => ['bin/fok.pl']
 );
 
-package MY;
-use File::ShareDir::Install qw(postamble);

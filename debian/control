@@ -1,0 +1,31 @@
+Source: libopn-fok-perl
+Section: perl
+Priority: optional
+Maintainer: Wesley Schwengle <wesley@schwengle.net>
+Build-Depends: debhelper (>= 8),
+    perl-modules,
+    libhtml-tree-perl,
+    libhttp-cookies-perl,
+    libhttp-date-perl,
+    libtest-checkmanifest-perl,
+    libtest-compile-perl,
+    libtest-exception-perl,
+    libtest-lwp-useragent-perl,
+    libtest-pod-coverage-perl,
+    libtest-pod-perl
+Build-Depends-Indep: perl
+Standards-Version: 3.9.2
+Homepage: https://github.com/waterkip/FokRSS
+
+Package: libopn-fok-perl
+Architecture: all
+Depends: ${misc:Depends}, ${perl:Depends},
+    libhtml-tree-perl,
+    libhttp-cookies-perl,
+    libhttp-date-perl,
+    libmoose-perl,
+    liburi-perl,
+    libwww-perl
+Description: A Fokforum parser written in Perl
+ A Fokforum parser written in Perl, used for a FokRSS feed.
+ .
