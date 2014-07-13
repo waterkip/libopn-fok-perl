@@ -1,44 +1,15 @@
-#!/usr/bin/env perl
-#
-#
-#
-use strict;
-use warnings;
-
-package FokTopic;
+package OPN::Fok::Topic;
+use Moose;
 
 use Data::Dumper;
 use Text::CSV;
 use Text::ParseWords;
 use HTML::Entities;
 use XML::RSS;
-use FokUA;
 use List::MoreUtils;
 use Encode;
 
-our @ISA     = qw(Exporter);
-our $VERSION = 0.1;
-our @EXPORT  = qw(get_topics);
-our @EXPORT_OK = qw(get_topics);
-
-my $csv = Text::CSV->new(
-    {
-        quote_char          => "'",
-        escape_char         => "\\",
-        escape_char         => "\\\'",
-        sep_char            => ',',
-        eol                 => $\,
-        always_quote        => 0,
-        binary              => 0,
-        keep_meta_info      => 0,
-        allow_loose_quotes  => 0,
-        allow_loose_escapes => 1,
-        allow_whitespace    => 1,
-        blank_is_undef      => 1,
-        verbatim            => 0,
-    }
-);
-
+my $csv;
 
 my @types = (
     [
@@ -146,3 +117,8 @@ sub get_topics {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+

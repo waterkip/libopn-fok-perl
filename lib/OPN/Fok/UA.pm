@@ -6,6 +6,9 @@ use HTTP::Request;
 use HTTP::Response;
 use HTTP::Cookies;
 use HTTP::Date;
+use URI;
+use HTML::Entities;
+use Data::Dumper;
 
 has ua => (
     is      => 'ro',
@@ -21,9 +24,9 @@ has ua => (
     },
 );
 
-has cookiejar => (
+has cookie_jar => (
     is      => 'ro',
-    isa     => 'HTTP::Cookie',
+    isa     => 'HTTP::Cookies',
     lazy    => 1,
     default => sub {
         my $self = shift;
@@ -34,19 +37,27 @@ has cookiejar => (
 has username => (
     is       => 'rw',
     isa      => 'Str',
-    required => 1,
 );
 
 has password => (
     is       => 'rw',
     isa      => 'Str',
-    required => 1,
 );
 
 has base_url => (
     is      => 'ro',
     default => 'http://forum.fok.nl',
     isa     => 'Str',
+);
+
+has _uri => (
+    is => 'ro',
+    isa => 'URI',
+    default => sub {
+        my $self = shift;
+        return URI->new($self->base_url);
+    },
+    lazy => 1,
 );
 
 
@@ -78,11 +89,16 @@ sub request_ok {
     $self->cookie_jar->extract_cookies($response);
 
     if (!$response->is_success()) {
-        die sprintf("Response is not succesful: %s", $response->statusline());
+        die sprintf("Response is not succesful: %s", $response->status_line());
     }
 
     $self->cookie_jar->save();
-    return $response;
+    return $response->content;
+}
+
+sub _get_uri {
+    my $self = shift;
+    return URI->new_abs(shift, $self->base_url);
 }
 
 sub login {
@@ -90,12 +106,10 @@ sub login {
 
     return if ($self->logged_in);
 
-    my $url = URI->new($self->base_url)->new_abs('user/login');
+    my $url = $self->_get_uri('user/login');
 
     my $request  = HTTP::Request->new("GET", $url);
-    my $response = $self->request_ok($request);
-
-    my @text     = split("\n", $response->content);
+    my @text     = split("\n", $self->request_ok($request));
 
     my %post = (
         referer     => $self->base_url,
@@ -111,8 +125,7 @@ sub login {
     $req->content_type('application/x-www-form-urlencoded');
     $req->content(\%post);
 
-    $response = $self->request_ok($req);
-    return $self->($response->content);
+    return $self->request_ok($req);
 }
 
 sub logged_in {
@@ -125,6 +138,7 @@ sub assert_session_id {
     my $response = shift;
 
     my ($re_sid, $re_value, $re_sessid);
+    my %post;
 
     # sid and sessid are both found in the source
     my ($found) = grep(/$re_sid/, @$response);
@@ -139,39 +153,192 @@ sub assert_session_id {
     return 1;
 }
 
-#sub get_topics_url {
-#    my ($self, $url) = @_;
-#    my $re_http = $self->{re_http};
-#    my $page    = $self->send_request("GET",
-#        $url =~ /$re_http/ ? $url : $self->{url} . $url);
-#
-#
-#    my $re_topic = $self->{re_topic};
-#    my $re_title = $self->{re_title};
-#    my $re_fok   = $self->{re_fok};
-#
-#    my @topics;
-#    foreach my $line (@$page) {
-#        next unless $line;
-#        chomp($line);
-#        $line = decode("iso-8859-15", $line);
-#        $line = decode_entities($line);
-#        if ($line =~ /$re_topic/) {
-#            push(@topics, $1);
-#            next;
-#        }
-#        elsif ($line =~ /$re_title/) {
-#            my $title = $1;
-#            $title =~ s/$re_fok//;
-#            push(@topics, $title);
-#            next;
-#        }
-#    }
-#
-#    #print Dumper \@topics;
-#    return wantarray ? @topics : \@topics;
-#}
-#
+sub _parse_subforum_tree {
+    my ($self, $builder) = @_;
+    my %subfora;
+    foreach my $table ($builder->look_down('_tag', 'table')) {
+        my $id = $table->attr('id');
+        next if !$id || $id ne 'subforums' ;
+        my $fora;
+        foreach my $td ($table->look_down('_tag', 'td')) {
+            my $class_name = $td->attr('class');
+            next unless $class_name;
+            if ($class_name eq 'tTitel') {
+                my $link = $td->look_down('_tag', 'a');
+                next unless $link;
+                $fora = $link->{_content}[0];
+                $subfora{$fora}{url} = $link->{href};
+            }
+            elsif ($class_name eq 'tPages') {
+                $subfora{$fora}{topics} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'tPosts') {
+                $subfora{$fora}{topics} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'tViews') {
+                $subfora{$fora}{views} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'tLastreply') {
+                $subfora{$fora}{last_reply} = $td->{_content}[0];
+            }
+        }
+    }
+    return \%subfora;
+}
+
+sub _parse_subforum_topics {
+    my ($self, $type, $builder) = @_;
+    my $result;
+    foreach my $table ($builder->look_down('_tag', 'table')) {
+        my $id = $table->attr('id');
+        next if !$id || $id ne $type ;
+        my $fora;
+        foreach my $td ($table->look_down('_tag', 'td')) {
+            my $class_name = $td->attr('class');
+            next unless $class_name;
+            if ($class_name eq 'tTitel') {
+                my $link = $self->_parse_link($td);
+                $fora = $link->{content};
+                $result->{$fora}{url} = $link->{url};
+            }
+            elsif ($class_name eq 'tPages') {
+                $result->{$fora}{topics} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'tPosts') {
+                $result->{$fora}{reacties} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'tViews') {
+                $result->{$fora}{views} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'tTopicstarter') {
+                my $link = $self->_parse_link($td);
+                $result->{$fora}{ts}{profile} = $link->{url};
+                $result->{$fora}{ts}{username} = $link->{content};
+            }
+            elsif ($class_name eq 'tLastreply') {
+                my $link = $self->_parse_link($td);
+                $result->{$fora}{last_reply}{url} = $link->{url};
+                $result->{$fora}{last_reply}{date} = $link->{content};
+            }
+        }
+    }
+    return $result;
+}
+
+sub _parse_link {
+    my $self = shift;
+    my $builder = shift;
+    my $link = $builder->look_down('_tag', 'a');
+    die "Not a link" if !$link;
+    my $content = $link->{_content}[0];
+    $content =~ s/^\s+//g;
+    return { url => $link->{href}, content => $content };
+}
+
+sub parse_forum {
+    my $self = shift;
+    my $id = shift;
+    my $url = $self->_get_uri("forum/$id");
+    my $content = $self->request_ok(HTTP::Request->new("GET", $url));
+
+    use HTML::TreeBuilder;
+    my $builder = HTML::TreeBuilder->new();
+    $builder->parse_content($content);
+
+    my %results;
+    my %subfora;
+
+    foreach my $group ($builder->look_down('_tag', 'div')) {
+        my $class_name = $group->attr('class');
+        next if !defined $class_name || $class_name ne 'mb2';
+
+        # Subfora
+        $results{subfora} = $self->_parse_subforum_tree($group) if !$results{subfora};
+        #my @types = qw(sticky open gesloten centrale);
+        my @types = qw(sticky);
+
+        foreach my $type (@types) {
+            if (!defined $results{$type}) {
+                $results{$type} = $self->_parse_subforum_topics(ucfirst($type), $group)
+            }
+        }
+    }
+    return \%results;
+}
+
+sub parse_index {
+    my $self = shift;
+
+    my $url = $self->_get_uri('index/forumindex');
+    my $content = $self->request_ok(HTTP::Request->new("GET", $url));
+
+    use HTML::TreeBuilder;
+    my $builder = HTML::TreeBuilder->new();
+    $builder->parse_content($content);
+
+    my %meta_fora;
+    foreach my $group ($builder->look_down('_tag', 'div')) {
+        {
+            my $name;
+            my $class_name = $group->attr('class');
+            next if !defined $class_name || $class_name ne 'mb2';
+            foreach my $th ($group->look_down('_tag', 'th')) {
+                $class_name = $th->attr('class');
+                if ($class_name eq 'iHoofdgroep') {
+                    my $link = $th->look_down('_tag', 'a');
+                    next unless $link;
+                    $name = $link->{_content}[0];
+                    $meta_fora{$name}{url} = $link->{href} if $link;
+                }
+            }
+
+            foreach my $tr ($group->look_down('_tag', 'tr')) {
+                my ($short_name, $fora, $topics, $url, $posts, $last_post, $moderator);
+                foreach my $td ($tr->look_down('_tag', 'td')) {
+                    my $class_name = $td->attr('class');
+                    next unless $class_name;
+                    my $link = 'bul';
+                    if ($class_name eq 'tFolder') {
+                        my $link = $td->look_down('_tag', 'a');
+                        next unless $link;
+                        $short_name = $link->{_content}[0];
+                        $short_name =~ s/^\s+//g;
+                    }
+                    elsif ($class_name eq 'iForum') {
+                        my $link = $td->look_down('_tag', 'a');
+                        next unless $link;
+                        $fora = $link->{_content}[0];
+                        $url  = $link->{href};
+                    }
+                    elsif ($class_name eq 'iTopics') {
+                        $topics = $td->{_content}[0];
+                    }
+                    elsif ($class_name eq 'iPosts') {
+                        $posts = $td->{_content}[0];
+                    }
+                    elsif ($class_name eq 'iLastPost') {
+                        $last_post = $td->{_content}[0];
+                    }
+                    elsif ($class_name eq 'iMod') {
+                        $moderator = $td->{_content}[0];
+                    }
+                }
+                next unless $short_name;
+                $meta_fora{$name}{fora}{$short_name} = {
+                    long_name => $fora,
+                    url       => $url,
+                    posts     => $posts,
+                    last_post => $last_post,
+                    moderator => $moderator,
+                    topics    => $topics,
+                };
+            }
+        }
+    }
+
+    return \%meta_fora;
+}
+
 
 __PACKAGE__->meta->make_immutable;
 
