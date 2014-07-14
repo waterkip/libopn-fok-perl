@@ -62,7 +62,7 @@ subtest parse_index => sub {
         ),
     );
 
-    my $data = $fok->parse_index();
+    my $data = $fok->parse_forum_index();
 
     # We are not going to test all the fora, just a few
     is($data->{Community}{url}, 'fok/list_category_topics/2', 'Community URL is correct');

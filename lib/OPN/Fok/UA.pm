@@ -60,28 +60,6 @@ has _uri => (
     lazy => 1,
 );
 
-
-#my $self = {
-#    user   => "slacker_nl",
-#    passwd => "your_secret_password",
-#    url    => "http://forum.fok.nl/",
-#    jar    => HTTP::Cookies->new(
-#        file => $jar
-#        ? $jar
-#        : "$ENV{HOME}/.opfokrss.cookiejar",
-#        autosave => 1
-#    ),
-#    re_sid    => qr/name="sid"/,
-#    re_sessid => qr/name="sessid"/,
-#    re_value  => qr/value="(\w+)"/,
-#    re_http   => qr/^\s*https?:\/\/\w+.*/,
-#    re_topic  => qr/^\s*(?:\w+)?topic\((.*)\)./,
-#    re_title  => qr/\s*\<title\>(.*)\<\/title\>/,
-#    re_fok    => qr/FOK!forum \/\s+/,
-#    am_here   => qr#href="http://i.fok.nl/templates/fokforum_(?:light|dark)/#,
-#    ua        => undef,
-#};
-
 sub request_ok {
     my ($self, $request) = @_;
 
@@ -109,7 +87,6 @@ sub login {
     my $url = $self->_get_uri('user/login');
 
     my $request  = HTTP::Request->new("GET", $url);
-    my @text     = split("\n", $self->request_ok($request));
 
     my %post = (
         referer     => $self->base_url,
@@ -151,6 +128,26 @@ sub assert_session_id {
     }
     # check if cookie has the same session id
     return 1;
+}
+
+sub _page2treebuilder {
+    my ($self, $path) = @_;
+
+    my $url = $self->_get_uri($path);
+    my $content = $self->request_ok(HTTP::Request->new("GET", $url));
+
+    my $builder = HTML::TreeBuilder->new();
+    $builder->parse_content($content);
+    return $builder;
+}
+
+sub _parse_link {
+    my ($self, $builder) = @_;
+    my $link = $builder->look_down('_tag', 'a');
+    die "Not a link" if !$link;
+    my $content = $link->{_content}[0];
+    $content =~ s/^\s+//g;
+    return { url => $link->{href}, content => $content };
 }
 
 sub _parse_subforum_tree {
@@ -225,117 +222,88 @@ sub _parse_subforum_topics {
     return $result;
 }
 
-sub _parse_link {
-    my $self = shift;
-    my $builder = shift;
-    my $link = $builder->look_down('_tag', 'a');
-    die "Not a link" if !$link;
-    my $content = $link->{_content}[0];
-    $content =~ s/^\s+//g;
-    return { url => $link->{href}, content => $content };
-}
-
 sub parse_forum {
     my $self = shift;
     my $id = shift;
-    my $url = $self->_get_uri("forum/$id");
-    my $content = $self->request_ok(HTTP::Request->new("GET", $url));
 
-    my $builder = HTML::TreeBuilder->new();
-    $builder->parse_content($content);
+    my $builder = $self->_page2treebuilder("forum/$id");
 
     my %results;
-    my %subfora;
-
     foreach my $group ($builder->look_down('_tag', 'div')) {
         my $class_name = $group->attr('class');
         next if !defined $class_name || $class_name ne 'mb2';
 
         # Subfora
         $results{subfora} = $self->_parse_subforum_tree($group) if !$results{subfora};
-        #my @types = qw(sticky open gesloten centrale);
-        my @types = qw(sticky);
+        my @types = qw(sticky open gesloten centrale);
 
         foreach my $type (@types) {
-            if (!defined $results{$type}) {
-                $results{$type} = $self->_parse_subforum_topics(ucfirst($type), $group)
-            }
+            next if defined $results{$type};
+            $results{$type} = $self->_parse_subforum_topics(ucfirst($type), $group);
         }
     }
     return \%results;
 }
 
-sub parse_index {
+sub parse_forum_index {
     my $self = shift;
+    my $builder = $self->_page2treebuilder('index/forumindex');
 
-    my $url = $self->_get_uri('index/forumindex');
-    my $content = $self->request_ok(HTTP::Request->new("GET", $url));
-
-    use HTML::TreeBuilder;
-    my $builder = HTML::TreeBuilder->new();
-    $builder->parse_content($content);
-
-    my %meta_fora;
+    my %results;
     foreach my $group ($builder->look_down('_tag', 'div')) {
-        {
-            my $name;
-            my $class_name = $group->attr('class');
-            next if !defined $class_name || $class_name ne 'mb2';
-            foreach my $th ($group->look_down('_tag', 'th')) {
-                $class_name = $th->attr('class');
-                if ($class_name eq 'iHoofdgroep') {
-                    my $link = $th->look_down('_tag', 'a');
-                    next unless $link;
-                    $name = $link->{_content}[0];
-                    $meta_fora{$name}{url} = $link->{href} if $link;
+        my $name;
+        my $class_name = $group->attr('class');
+        next if !defined $class_name || $class_name ne 'mb2';
+
+        foreach my $th ($group->look_down('_tag', 'th')) {
+            $class_name = $th->attr('class');
+            if ($class_name eq 'iHoofdgroep') {
+                if ($th->{_content}[0] eq 'Overig') {
+                    # Bookmarks and archives
+                    $name = 'Overig';
+                    $results{$name}{url} = undef;
+                }
+                else {
+                    my $link = $self->_parse_link($th);
+                    $name = $link->{content};
+                    $results{$name}{url} = $link->{url};
                 }
             }
+        }
 
-            foreach my $tr ($group->look_down('_tag', 'tr')) {
-                my ($short_name, $fora, $topics, $url, $posts, $last_post, $moderator);
-                foreach my $td ($tr->look_down('_tag', 'td')) {
-                    my $class_name = $td->attr('class');
-                    next unless $class_name;
-                    my $link = 'bul';
-                    if ($class_name eq 'tFolder') {
-                        my $link = $td->look_down('_tag', 'a');
-                        next unless $link;
-                        $short_name = $link->{_content}[0];
-                        $short_name =~ s/^\s+//g;
-                    }
-                    elsif ($class_name eq 'iForum') {
-                        my $link = $td->look_down('_tag', 'a');
-                        next unless $link;
-                        $fora = $link->{_content}[0];
-                        $url  = $link->{href};
-                    }
-                    elsif ($class_name eq 'iTopics') {
-                        $topics = $td->{_content}[0];
-                    }
-                    elsif ($class_name eq 'iPosts') {
-                        $posts = $td->{_content}[0];
-                    }
-                    elsif ($class_name eq 'iLastPost') {
-                        $last_post = $td->{_content}[0];
-                    }
-                    elsif ($class_name eq 'iMod') {
-                        $moderator = $td->{_content}[0];
-                    }
+        foreach my $tr ($group->look_down('_tag', 'tr')) {
+            my $short_name;
+            foreach my $td ($tr->look_down('_tag', 'td')) {
+                my $class_name = $td->attr('class');
+                next unless $class_name;
+                if ($class_name eq 'tFolder') {
+                    my $link = $self->_parse_link($td);
+                    $short_name = $link->{content};
                 }
                 next unless $short_name;
-                $meta_fora{$name}{fora}{$short_name} = {
-                    long_name => $fora,
-                    url       => $url,
-                    posts     => $posts,
-                    last_post => $last_post,
-                    moderator => $moderator,
-                    topics    => $topics,
-                };
+
+                if ($class_name eq 'iForum') {
+                    my $link = $self->_parse_link($td);
+                    $results{$name}{fora}{$short_name}{long_name} = $link->{content};
+                    $results{$name}{fora}{$short_name}{url} = $link->{url};
+                }
+                elsif ($class_name eq 'iTopics') {
+                    $results{$name}{fora}{$short_name}{topics} = $td->{_content}[0];
+                }
+                elsif ($class_name eq 'iPosts') {
+                    $results{$name}{fora}{$short_name}{posts} = $td->{_content}[0];
+                }
+                elsif ($class_name eq 'iLastPost') {
+                    $results{$name}{fora}{$short_name}{last_post} = $td->{_content}[0];
+                }
+                elsif ($class_name eq 'iMod') {
+                    $results{$name}{fora}{$short_name}{moderator} = $td->{_content}[0];
+                }
             }
         }
     }
 
-    return \%meta_fora;
+    return \%results;
 }
 
 
