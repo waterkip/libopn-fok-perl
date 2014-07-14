@@ -1,1 +1,3 @@
-Makefile$
+Makefile
+debian/libopn-fok-perl*
+debian/files
