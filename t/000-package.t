@@ -11,7 +11,7 @@ subtest 'Manifest test' => sub {
 
 subtest 'Compile modules tests' => sub {
     my $ok = all_pm_files_ok();
-    # uncoverable condition false
+    # uncoverable branch true
     BAIL_OUT("Compilation of modules failed") if (!$ok);
 };
 

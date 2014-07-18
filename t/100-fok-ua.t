@@ -36,11 +36,9 @@ subtest request_ok => sub {
         )
     );
 
-    is(
-        $fok->request_ok(HTTP::Request->new("GET", 'http://test/request_ok')),
-        "Iets",
-        "request_ok"
-    );
+    is($fok->request_ok(
+            HTTP::Request->new("GET", 'http://test/request_ok')),
+        "Iets", "request_ok");
 
     throws_ok(
         sub {
@@ -50,6 +48,30 @@ subtest request_ok => sub {
         qr/Response is not succesful: 500 ERR/,
         "request_ok deals with failure"
     );
+};
+
+subtest initial_ssid => sub {
+    $ua->map_response(
+        qr{user/login},
+        HTTP::Response->new(
+            '200', 'OK',
+            ['Content-Type' => 'text/html'],
+            open_html_files('t/inc/html/user_login.html')
+        ),
+    );
+    ok($fok->login(), "Logged in to Fok!");
+};
+
+subtest login => sub {
+    $ua->map_response(
+        qr{user/login},
+        HTTP::Response->new(
+            '302', 'OK',
+            ['Content-Type' => 'text/html'],
+            open_html_files('t/inc/html/login_not_logged_in.html')
+        ),
+    );
+    ok($fok->login(), "Logged in to Fok!");
 };
 
 subtest parse_index => sub {
@@ -65,9 +87,10 @@ subtest parse_index => sub {
     my $data = $fok->parse_forum_index();
 
     # We are not going to test all the fora, just a few
-    is($data->{Community}{url}, 'fok/list_category_topics/2', 'Community URL is correct');
+    is($data->{Community}{url},
+        'fok/list_category_topics/2', 'Community URL is correct');
 
-    my $def = $data->{Community}{fora}{DEF};
+    my $def      = $data->{Community}{fora}{DEF};
     my $contents = {
         last_post => '13-07-2014 13:02',
         long_name => 'Defensie',
@@ -81,11 +104,11 @@ subtest parse_index => sub {
 };
 
 subtest parse_forum => sub {
-
     $ua->map_response(
         qr{forum/16},
         HTTP::Response->new(
-            '200', 'OK', ['Content-Type' => 'text/html'],
+            '200', 'OK',
+            ['Content-Type' => 'text/html'],
             open_html_files('t/inc/html/dig.html'),
         ),
     );
@@ -107,10 +130,10 @@ subtest parse_forum => sub {
     is_deeply(
         $data->{sticky}{'De DIG huisregels'},
         {
-            url        => 'topic/1589228',
-            reacties   => 3,
-            views      => '10.948',
-            ts => {
+            url      => 'topic/1589228',
+            reacties => 3,
+            views    => '10.948',
+            ts       => {
                 username => 'smegmanus',
                 profile  => 'user/profile/267547'
             },
@@ -124,6 +147,7 @@ subtest parse_forum => sub {
         "Sticky huisregels gevonden"
     );
 };
+
 #
 #subtest parse_filter_index => sub {
 #    my $data = $fok->parse_forum();

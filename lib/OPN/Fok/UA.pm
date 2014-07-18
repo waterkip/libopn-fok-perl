@@ -10,6 +10,8 @@ use HTTP::Response;
 use LWP::UserAgent;
 use URI;
 
+use Data::Dumper;
+
 has ua => (
     is      => 'ro',
     isa     => 'LWP::UserAgent',
@@ -79,39 +81,52 @@ sub _get_uri {
     return URI->new_abs(shift, $self->base_url);
 }
 
+
 sub login {
     my $self = shift;
 
     return if ($self->logged_in);
 
-    my $url = $self->_get_uri('user/login');
-
-    my $request  = HTTP::Request->new("GET", $url);
-
     my %post = (
         referer     => $self->base_url,
         Save_login  => "TRUE",
-        Username    => $self->username,
-        Password    => $self->password,
-        location    => $self->ua->agent,
+        Username    => $self->username || '',
+        Password    => $self->password || '',
+        location    => $self->ua->agent || '',
         Expire_time => 28800,
         submit      => "Inloggen",
     );
 
-    my $req = HTTP::Request->new("POST", $url);
+    my $req = HTTP::Request->new("POST", $self->_get_uri('user/login'));
     $req->content_type('application/x-www-form-urlencoded');
     $req->content(\%post);
 
-    return $self->request_ok($req);
+    die Dumper $self->request_ok($req);
 }
 
 sub logged_in {
     my $self = shift;
+
+    $self->assert_session_id;
+
     return 0;
+}
+
+sub _get_sessid_from_login_page {
+    my $self = shift;
+
+    my $builder = $self->_page2treebuilder('user/login');
+
+    foreach my $input ($builder->look_down('_tag', 'input')) { 
+        if ($input->attr('name') eq 'sessid') { 
+            die $input;
+        }
+    }
 }
 
 sub assert_session_id {
     my $self = shift;
+    return 1;
     my $response = shift;
 
     my ($re_sid, $re_value, $re_sessid);
@@ -226,6 +241,8 @@ sub parse_forum {
     my $self = shift;
     my $id = shift;
 
+    die "No ID given" if !$id;
+
     my $builder = $self->_page2treebuilder("forum/$id");
 
     my %results;
@@ -245,62 +262,77 @@ sub parse_forum {
     return \%results;
 }
 
+sub _parse_forum_index_meta_fora {
+    my ($self, $builder) = @_;
+
+    foreach my $th ($builder->look_down('_tag', 'th')) {
+        if ($th->attr('class') eq 'iHoofdgroep') {
+            # Bookmarks and archives
+            if ($th->{_content}[0] eq 'Overig') {
+                return ('Overig', undef );
+            }
+            else {
+                my $link = $self->_parse_link($th);
+                return ($link->{content}, $link->{url});
+            }
+        }
+    }
+}
+
+sub _parse_forum_index_fora {
+    my ($self, $builder) = @_;
+
+    my $results = {};
+    foreach my $tr ($builder->look_down('_tag', 'tr')) {
+        my $short_name;
+        foreach my $td ($tr->look_down('_tag', 'td')) {
+            my $class_name = $td->attr('class');
+            next unless $class_name;
+            if ($class_name eq 'tFolder') {
+                my $link = $self->_parse_link($td);
+                $short_name = $link->{content};
+            }
+            next unless $short_name;
+
+            if ($class_name eq 'iForum') {
+                my $link = $self->_parse_link($td);
+                $results->{$short_name}{long_name} = $link->{content};
+                $results->{$short_name}{url} = $link->{url};
+            }
+            elsif ($class_name eq 'iTopics') {
+                $results->{$short_name}{topics} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'iPosts') {
+                $results->{$short_name}{posts} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'iLastPost') {
+                $results->{$short_name}{last_post} = $td->{_content}[0];
+            }
+            elsif ($class_name eq 'iMod') {
+                $results->{$short_name}{moderator} = $td->{_content}[0];
+            }
+        }
+    }
+    return $results;
+}
+
 sub parse_forum_index {
     my $self = shift;
     my $builder = $self->_page2treebuilder('index/forumindex');
 
     my %results;
+
     foreach my $group ($builder->look_down('_tag', 'div')) {
-        my $name;
         my $class_name = $group->attr('class');
         next if !defined $class_name || $class_name ne 'mb2';
+        my ($name, $url) = $self->_parse_forum_index_meta_fora($group);
+        next unless $name;
+        $results{$name}{url} = $url;
 
-        foreach my $th ($group->look_down('_tag', 'th')) {
-            $class_name = $th->attr('class');
-            if ($class_name eq 'iHoofdgroep') {
-                if ($th->{_content}[0] eq 'Overig') {
-                    # Bookmarks and archives
-                    $name = 'Overig';
-                    $results{$name}{url} = undef;
-                }
-                else {
-                    my $link = $self->_parse_link($th);
-                    $name = $link->{content};
-                    $results{$name}{url} = $link->{url};
-                }
-            }
-        }
-
-        foreach my $tr ($group->look_down('_tag', 'tr')) {
-            my $short_name;
-            foreach my $td ($tr->look_down('_tag', 'td')) {
-                my $class_name = $td->attr('class');
-                next unless $class_name;
-                if ($class_name eq 'tFolder') {
-                    my $link = $self->_parse_link($td);
-                    $short_name = $link->{content};
-                }
-                next unless $short_name;
-
-                if ($class_name eq 'iForum') {
-                    my $link = $self->_parse_link($td);
-                    $results{$name}{fora}{$short_name}{long_name} = $link->{content};
-                    $results{$name}{fora}{$short_name}{url} = $link->{url};
-                }
-                elsif ($class_name eq 'iTopics') {
-                    $results{$name}{fora}{$short_name}{topics} = $td->{_content}[0];
-                }
-                elsif ($class_name eq 'iPosts') {
-                    $results{$name}{fora}{$short_name}{posts} = $td->{_content}[0];
-                }
-                elsif ($class_name eq 'iLastPost') {
-                    $results{$name}{fora}{$short_name}{last_post} = $td->{_content}[0];
-                }
-                elsif ($class_name eq 'iMod') {
-                    $results{$name}{fora}{$short_name}{moderator} = $td->{_content}[0];
-                }
-            }
-        }
+        $results{$name}{fora} = {
+            %{ $self->_parse_forum_index_fora($group) },
+            %{ $results{$name}{fora} || {} }
+        };
     }
 
     return \%results;

@@ -1,14 +1,16 @@
 lib/OPN/Fok/RSS.pm
 lib/OPN/Fok/UA.pm
 Makefile.PL
-MANIFEST            This list of files
+MANIFEST			This list of files
 MANIFEST.SKIP
 t/000-package.t
 t/100-fok-ua.t
 t/inc/html/active.html
 t/inc/html/dig.html
+t/inc/html/failed_login.html
 t/inc/html/filter.html
 t/inc/html/fok.nl.html
+t/inc/html/login_not_logged_in.html
 t/inc/html/reeks.html
 t/inc/html/sticky.html
 t/inc/XML/RSS.pm
