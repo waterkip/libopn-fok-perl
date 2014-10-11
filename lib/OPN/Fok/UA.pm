@@ -6,6 +6,7 @@ use HTML::TreeBuilder;
 use HTTP::Cookies;
 use HTTP::Date;
 use HTTP::Request;
+use HTTP::Request::Common qw(POST GET);
 use HTTP::Response;
 use LWP::UserAgent;
 use URI;
@@ -64,7 +65,7 @@ has _uri => (
     lazy => 1,
 );
 
-has ssid => (
+has sessid => (
     is      => 'rw',
     isa     => 'Str',
     lazy    => 1,
@@ -101,39 +102,43 @@ sub _get_uri {
 sub login {
     my $self = shift;
 
-    my %post = (
-        referer     => $self->base_url,
+    my $builder = $self->_page2treebuilder('user/login');
+    my $sids    = $self->_get_session_information_from_page($builder);
+
+    foreach (keys %$sids) {
+        $self->$_($sids->{$_});
+    }
+
+    my $req = POST  $self->_get_uri('user/login'), [
+        referer     => "",
         Save_login  => "TRUE",
         Username    => $self->username,
         Password    => $self->password,
         location    => $self->ua->agent,
+        Lock_IP     => 0,
         Expire_time => 28800,
         submit      => "Inloggen",
-    );
+        sessid      => $self->sessid,
+        sid         => $self->sid,
+    ];
 
-    my $req = HTTP::Request->new("POST", $self->_get_uri('user/login'), [ %post ]);
-    $req->content_type('application/x-www-form-urlencoded');
-
-    my $content = $self->request_ok($req);
-    my $builder = $self->_get_builder($content);
-    my $sids    = $self->_get_session_information_from_page($builder);
-
-    return $sids;
+    return $self->_req2builder($req);
 }
 
 sub _get_session_information_from_page {
     my ($self, $builder) = @_;
 
-    my $ids = { ssid => '', sid => '' };
+    my $ids = { sessid => '', sid => '' };
 
     foreach my $input ($builder->look_down('_tag', 'input')) {
         if ($input->attr('name') eq 'sessid') {
-            $ids->{ssid} = $input->attr('value');
+            $ids->{sessid} = $input->attr('value');
         }
         if ($input->attr('name') eq 'sid') {
             $ids->{sid} = $input->attr('value');
         }
     }
+    return $ids;
 }
 
 sub assert_session_id {
@@ -147,19 +152,37 @@ sub assert_session_id {
     return 1;
 }
 
+sub _assert_error {
+    my $self = shift;
+    my $builder = shift;
+
+    foreach my $input ($builder->look_down('class', 'bch1')) {
+        my $content = $input->{_content}[0];
+        if ($content =~ /^error/) {
+            foreach my $x ($builder->look_down('class', 'info roundall')) {
+                die "Fok returned the following error: $x->{_content}[0]\n";
+            }
+        }
+    }
+    return;
+}
+
 sub _get_builder {
     my ($self, $content) = @_;
     my $builder = HTML::TreeBuilder->new();
     $builder->parse_content($content) if defined $content;
+    $self->_assert_error($builder);
     return $builder;
+}
+
+sub _req2builder {
+    my ($self, $req) = @_;
+    return $self->_get_builder($self->request_ok($req));
 }
 
 sub _page2treebuilder {
     my ($self, $path) = @_;
-
-    my $url = $self->_get_uri($path);
-    my $content = $self->request_ok(HTTP::Request->new("GET", $url));
-    return $self->_get_builder($content);
+    return $self->_req2builder(HTTP::Request->new("GET", $self->_get_uri($path)));
 }
 
 sub _parse_link {
@@ -393,7 +416,7 @@ Do a request, if it fails, die.
 =head2 test
 
 No-op, just here to test some cli script.
-    
+
 =head1 AUTHOR
 
 Wesley Schwengle C<wesley at schwengle dot net>

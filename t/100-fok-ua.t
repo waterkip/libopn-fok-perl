@@ -62,17 +62,17 @@ subtest request_ok => sub {
 #    ok($fok->login(), "Logged in to Fok!");
 #};
 
-subtest login => sub {
-    $ua->map_response(
-        qr{user/login},
-        HTTP::Response->new(
-            '302', 'OK',
-            ['Content-Type' => 'text/html'],
-            open_html_files('login_not_logged_in.html')
-        ),
-    );
-    ok($fok->login(), "Logged in to Fok!");
-};
+#subtest login => sub {
+#    $ua->map_response(
+#        qr{user/login},
+#        HTTP::Response->new(
+#            '302', 'OK',
+#            ['Content-Type' => 'text/html'],
+#            open_html_files('login_not_logged_in.html')
+#        ),
+#    );
+#    ok($fok->login(), "Logged in to Fok!");
+#};
 
 subtest parse_index => sub {
     $ua->map_response(

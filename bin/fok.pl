@@ -3,6 +3,7 @@ use warnings;
 use strict;
 
 use OPN::Fok::UA;
+use Data::Dumper;
 
 # TODO: Fix a general appconfig::opn subclass
 use AppConfig;
@@ -13,7 +14,7 @@ use Pod::Usage;
 my $config = AppConfig->new(
     { CASE => 1, CREATE => 1 }, qw(
         url=s
-        user=s
+        username=s
         password=s
         type=s
         list-types
@@ -46,11 +47,14 @@ my $fok = OPN::Fok::UA->new(
 my $method = $config->type;
 # TODO: Check if the method is in types-list.
 
-if (!$fok->can($method)) { 
+if (!$fok->can($method)) {
     die "Unable to perform $method";
 }
 
-$fok->login;
+my $x = $fok->login;
+
+die Dumper $x;
+
 $fok->$method;
 
 __END__
