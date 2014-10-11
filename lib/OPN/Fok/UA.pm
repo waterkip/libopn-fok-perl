@@ -133,10 +133,9 @@ sub logged_in {
 }
 
 sub _get_session_information_from_page {
-    my $self    = shift;
-    my $builder = shift;
+    my ($self, $builder) = @_;
 
-    my $ids = {};
+    my $ids = { ssid => '', sid => '' };
 
     foreach my $input ($builder->look_down('_tag', 'input')) {
         if ($input->attr('name') eq 'sessid') {
