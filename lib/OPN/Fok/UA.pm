@@ -37,13 +37,13 @@ has cookie_jar => (
 );
 
 has username => (
-    is       => 'rw',
-    isa      => 'Str',
+    is  => 'rw',
+    isa => 'Str',
 );
 
 has password => (
-    is       => 'rw',
-    isa      => 'Str',
+    is  => 'rw',
+    isa => 'Str',
 );
 
 has base_url => (
@@ -53,13 +53,27 @@ has base_url => (
 );
 
 has _uri => (
-    is => 'ro',
-    isa => 'URI',
+    is      => 'ro',
+    isa     => 'URI',
     default => sub {
         my $self = shift;
         return URI->new($self->base_url);
     },
     lazy => 1,
+);
+
+has ssid => (
+    is      => 'rw',
+    isa     => 'Str',
+    lazy    => 1,
+    default => sub { return '' },
+);
+
+has sid => (
+    is      => 'rw',
+    isa     => 'Str',
+    lazy    => 1,
+    default => sub { return '' },
 );
 
 sub request_ok {
@@ -101,7 +115,11 @@ sub login {
     $req->content_type('application/x-www-form-urlencoded');
     $req->content(\%post);
 
-    die Dumper $self->request_ok($req);
+    my $content = $self->request_ok($req);
+    my $builder = $self->_get_builder($content);
+    my $sids    = $self->_get_session_information_from_page($builder);
+
+    return $sids;
 }
 
 sub logged_in {
@@ -112,37 +130,38 @@ sub logged_in {
     return 0;
 }
 
-sub _get_sessid_from_login_page {
-    my $self = shift;
+sub _get_session_information_from_page {
+    my $self    = shift;
+    my $builder = shift;
 
-    my $builder = $self->_page2treebuilder('user/login');
+    my $ids = {};
 
-    foreach my $input ($builder->look_down('_tag', 'input')) { 
-        if ($input->attr('name') eq 'sessid') { 
-            die $input;
+    foreach my $input ($builder->look_down('_tag', 'input')) {
+        if ($input->attr('name') eq 'sessid') {
+            $ids->{ssid} = $input->attr('value');
+        }
+        if ($input->attr('name') eq 'sid') {
+            $ids->{sid} = $input->attr('value');
         }
     }
 }
 
 sub assert_session_id {
     my $self = shift;
-    return 1;
-    my $response = shift;
+    my $ids  = shift;
 
-    my ($re_sid, $re_value, $re_sessid);
-    my %post;
+    return 0 if $ids->{ssid} || '' ne $self->ssid;
+    return 0 if $ids->{sid}  || '' ne $self->sid;
 
-    # sid and sessid are both found in the source
-    my ($found) = grep(/$re_sid/, @$response);
-    if ($found =~ m/$re_value/) {
-        $post{sid} = $1;
-    }
-    ($found) = grep(/$re_sessid/, @$response);
-    if ($found =~ m/$re_value/) {
-        $post{sessid} = $1;
-    }
     # check if cookie has the same session id
     return 1;
+}
+
+sub _get_builder {
+    my ($self, $content) = @_;
+    my $builder = HTML::TreeBuilder->new();
+    $builder->parse_content($content) if defined $content;
+    return $builder;
 }
 
 sub _page2treebuilder {
@@ -150,10 +169,7 @@ sub _page2treebuilder {
 
     my $url = $self->_get_uri($path);
     my $content = $self->request_ok(HTTP::Request->new("GET", $url));
-
-    my $builder = HTML::TreeBuilder->new();
-    $builder->parse_content($content);
-    return $builder;
+    return $self->_get_builder($content);
 }
 
 sub _parse_link {
@@ -170,7 +186,7 @@ sub _parse_subforum_tree {
     my %subfora;
     foreach my $table ($builder->look_down('_tag', 'table')) {
         my $id = $table->attr('id');
-        next if !$id || $id ne 'subforums' ;
+        next if !$id || $id ne 'subforums';
         my $fora;
         foreach my $td ($table->look_down('_tag', 'td')) {
             my $class_name = $td->attr('class');
@@ -203,7 +219,7 @@ sub _parse_subforum_topics {
     my $result;
     foreach my $table ($builder->look_down('_tag', 'table')) {
         my $id = $table->attr('id');
-        next if !$id || $id ne $type ;
+        next if !$id || $id ne $type;
         my $fora;
         foreach my $td ($table->look_down('_tag', 'td')) {
             my $class_name = $td->attr('class');
@@ -224,12 +240,12 @@ sub _parse_subforum_topics {
             }
             elsif ($class_name eq 'tTopicstarter') {
                 my $link = $self->_parse_link($td);
-                $result->{$fora}{ts}{profile} = $link->{url};
+                $result->{$fora}{ts}{profile}  = $link->{url};
                 $result->{$fora}{ts}{username} = $link->{content};
             }
             elsif ($class_name eq 'tLastreply') {
                 my $link = $self->_parse_link($td);
-                $result->{$fora}{last_reply}{url} = $link->{url};
+                $result->{$fora}{last_reply}{url}  = $link->{url};
                 $result->{$fora}{last_reply}{date} = $link->{content};
             }
         }
@@ -239,7 +255,7 @@ sub _parse_subforum_topics {
 
 sub parse_forum {
     my $self = shift;
-    my $id = shift;
+    my $id   = shift;
 
     die "No ID given" if !$id;
 
@@ -251,12 +267,14 @@ sub parse_forum {
         next if !defined $class_name || $class_name ne 'mb2';
 
         # Subfora
-        $results{subfora} = $self->_parse_subforum_tree($group) if !$results{subfora};
+        $results{subfora} = $self->_parse_subforum_tree($group)
+            if !$results{subfora};
         my @types = qw(sticky open gesloten centrale);
 
         foreach my $type (@types) {
             next if defined $results{$type};
-            $results{$type} = $self->_parse_subforum_topics(ucfirst($type), $group);
+            $results{$type}
+                = $self->_parse_subforum_topics(ucfirst($type), $group);
         }
     }
     return \%results;
@@ -267,9 +285,10 @@ sub _parse_forum_index_meta_fora {
 
     foreach my $th ($builder->look_down('_tag', 'th')) {
         if ($th->attr('class') eq 'iHoofdgroep') {
+
             # Bookmarks and archives
             if ($th->{_content}[0] eq 'Overig') {
-                return ('Overig', undef );
+                return ('Overig', undef);
             }
             else {
                 my $link = $self->_parse_link($th);
@@ -297,7 +316,7 @@ sub _parse_forum_index_fora {
             if ($class_name eq 'iForum') {
                 my $link = $self->_parse_link($td);
                 $results->{$short_name}{long_name} = $link->{content};
-                $results->{$short_name}{url} = $link->{url};
+                $results->{$short_name}{url}       = $link->{url};
             }
             elsif ($class_name eq 'iTopics') {
                 $results->{$short_name}{topics} = $td->{_content}[0];
@@ -317,7 +336,7 @@ sub _parse_forum_index_fora {
 }
 
 sub parse_forum_index {
-    my $self = shift;
+    my $self    = shift;
     my $builder = $self->_page2treebuilder('index/forumindex');
 
     my %results;

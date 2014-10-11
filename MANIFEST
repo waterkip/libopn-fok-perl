@@ -13,4 +13,5 @@ t/inc/html/fok.nl.html
 t/inc/html/login_not_logged_in.html
 t/inc/html/reeks.html
 t/inc/html/sticky.html
+t/inc/html/user_login.html
 t/inc/XML/RSS.pm
