@@ -50,17 +50,17 @@ subtest request_ok => sub {
     );
 };
 
-subtest initial_ssid => sub {
-    $ua->map_response(
-        qr{user/login},
-        HTTP::Response->new(
-            '200', 'OK',
-            ['Content-Type' => 'text/html'],
-            open_html_files('user_login.html')
-        ),
-    );
-    ok($fok->login(), "Logged in to Fok!");
-};
+#subtest initial_ssid => sub {
+#    $ua->map_response(
+#        qr{user/login},
+#        HTTP::Response->new(
+#            '200', 'OK',
+#            ['Content-Type' => 'text/html'],
+#            open_html_files('user_login.html')
+#        ),
+#    );
+#    ok($fok->login(), "Logged in to Fok!");
+#};
 
 subtest login => sub {
     $ua->map_response(

@@ -2,12 +2,11 @@ package OPN::Fok::RSS;
 use Moose;
 
 has ua => (
-    is => 'ro',
+    is  => 'ro',
+    isa => 'OPN::Fok::UA',
 );
 
-has rss => (
-    is => 'ro',
-);
+has rss => (is => 'ro',);
 
 __PACKAGE__->meta->make_immutable;
 

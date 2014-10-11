@@ -84,7 +84,8 @@ sub request_ok {
     my $response = $self->ua->request($request);
     $self->cookie_jar->extract_cookies($response);
 
-    if (!$response->is_success()) {
+
+    if (!$response->is_success) {
         die sprintf("Response is not succesful: %s", $response->status_line());
     }
 
@@ -97,11 +98,8 @@ sub _get_uri {
     return URI->new_abs(shift, $self->base_url);
 }
 
-
 sub login {
     my $self = shift;
-
-    return if ($self->logged_in);
 
     my %post = (
         referer     => $self->base_url,
@@ -113,23 +111,14 @@ sub login {
         submit      => "Inloggen",
     );
 
-    my $req = HTTP::Request->new("POST", $self->_get_uri('user/login'));
+    my $req = HTTP::Request->new("POST", $self->_get_uri('user/login'), [ %post ]);
     $req->content_type('application/x-www-form-urlencoded');
-    $req->content(\%post);
 
     my $content = $self->request_ok($req);
     my $builder = $self->_get_builder($content);
     my $sids    = $self->_get_session_information_from_page($builder);
 
     return $sids;
-}
-
-sub logged_in {
-    my $self = shift;
-
-    $self->assert_session_id;
-
-    return 0;
 }
 
 sub _get_session_information_from_page {
@@ -358,6 +347,12 @@ sub parse_forum_index {
     return \%results;
 }
 
+sub test {
+    my $self = shift;
+
+    print "Just here to entertain you", $/;
+}
+
 
 __PACKAGE__->meta->make_immutable;
 
@@ -375,6 +370,30 @@ OPN::Fok::UA - A Fok UserAgent client
 
 =head1 METHODS
 
+=head2 assert_session_id
+
+Checks the session id, if this fails you need to login again.
+
+=head2 login
+
+Login to Fok
+
+=head2 parse_forum
+
+Parse a forum
+
+=head2 parse_forum_index
+
+Parse the forum index
+
+=head2 request_ok
+
+Do a request, if it fails, die.
+
+=head2 test
+
+No-op, just here to test some cli script.
+    
 =head1 AUTHOR
 
 Wesley Schwengle C<wesley at schwengle dot net>

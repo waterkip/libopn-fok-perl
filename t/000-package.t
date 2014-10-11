@@ -15,16 +15,16 @@ subtest 'Compile modules tests' => sub {
     BAIL_OUT("Compilation of modules failed") if (!$ok);
 };
 
-#subtest 'Compile script tests' => sub {
-#    all_pl_files_ok();
-#};
+subtest 'Compile script tests' => sub {
+    all_pl_files_ok();
+};
 
 subtest 'POD compile tests' => sub {
     all_pod_files_ok();
 };
 
-#subtest 'POD coverage tests' => sub {
-#    all_pod_coverage_ok();
-#};
+subtest 'POD coverage tests' => sub {
+    all_pod_coverage_ok();
+};
 
 done_testing();

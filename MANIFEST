@@ -1,3 +1,5 @@
+bin/fok.pl
+etc/fokrss.conf.dist
 lib/OPN/Fok/RSS.pm
 lib/OPN/Fok/UA.pm
 Makefile.PL
