@@ -7,16 +7,17 @@ use OPN::Fok::UA;
 use HTTP::Request;
 use HTTP::Response;
 use HTML::Entities;
+use File::Spec::Functions qw(catfile);
 
 sub open_html_files {
     my $file = shift;
-    open my $fh, '<', $file;
+    open my $fh, '<', catfile(qw(t data html), $file);
     my $contents;
     local $/;
     return <$fh>;
 }
 
-my $ua = Test::LWP::UserAgent->new;
+my $ua = Test::LWP::UserAgent->new(agent => 'test');
 
 my $fok = OPN::Fok::UA->new(ua => $ua,);
 
@@ -55,7 +56,7 @@ subtest initial_ssid => sub {
         HTTP::Response->new(
             '200', 'OK',
             ['Content-Type' => 'text/html'],
-            open_html_files('t/inc/html/user_login.html')
+            open_html_files('user_login.html')
         ),
     );
     ok($fok->login(), "Logged in to Fok!");
@@ -67,7 +68,7 @@ subtest login => sub {
         HTTP::Response->new(
             '302', 'OK',
             ['Content-Type' => 'text/html'],
-            open_html_files('t/inc/html/login_not_logged_in.html')
+            open_html_files('login_not_logged_in.html')
         ),
     );
     ok($fok->login(), "Logged in to Fok!");
@@ -79,7 +80,7 @@ subtest parse_index => sub {
         HTTP::Response->new(
             '200', 'OK',
             ['Content-Type' => 'text/html'],
-            open_html_files('t/inc/html/fok.nl.html'),
+            open_html_files('fok.nl.html'),
         ),
     );
 
@@ -108,7 +109,7 @@ subtest parse_forum => sub {
         HTTP::Response->new(
             '200', 'OK',
             ['Content-Type' => 'text/html'],
-            open_html_files('t/inc/html/dig.html'),
+            open_html_files('dig.html'),
         ),
     );
 

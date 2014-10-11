@@ -50,7 +50,7 @@ has password => (
 
 has base_url => (
     is      => 'ro',
-    default => 'http://forum.fok.nl',
+    default => sub { return 'http://forum.fok.nl' },
     isa     => 'Str',
 );
 
