@@ -3,7 +3,6 @@ use Test::Exception;
 use Test::LWP::UserAgent;
 use autodie;
 
-use Data::Dumper;
 use OPN::Fok::UA;
 use HTTP::Request;
 use HTTP::Response;

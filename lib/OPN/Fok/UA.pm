@@ -37,13 +37,15 @@ has cookie_jar => (
 );
 
 has username => (
-    is  => 'rw',
-    isa => 'Str',
+    is      => 'rw',
+    isa     => 'Str',
+    default => sub { return '' },
 );
 
 has password => (
-    is  => 'rw',
-    isa => 'Str',
+    is      => 'rw',
+    isa     => 'Str',
+    default => sub { return '' },
 );
 
 has base_url => (
@@ -104,9 +106,9 @@ sub login {
     my %post = (
         referer     => $self->base_url,
         Save_login  => "TRUE",
-        Username    => $self->username || '',
-        Password    => $self->password || '',
-        location    => $self->ua->agent || '',
+        Username    => $self->username,
+        Password    => $self->password,
+        location    => $self->ua->agent,
         Expire_time => 28800,
         submit      => "Inloggen",
     );
@@ -376,7 +378,7 @@ OPN::Fok::UA - A Fok UserAgent client
 
 =head1 AUTHOR
 
-Wesley Schwengle wesley at schwengle dot net
+Wesley Schwengle C<wesley at schwengle dot net>
 
 =head1 COPYRIGHT and LICENCE
 
