@@ -17,6 +17,7 @@ my $config = AppConfig->new(
         username=s
         password=s
         type=s
+        id=s
         list-types
 
         help
@@ -31,7 +32,7 @@ $config->getopt(\@ARGV);
 
 pod2usage(0) if $config->get('help');
 
-foreach (qw(type username password)) {
+foreach (qw(username password)) {
     if (!defined $config->$_) {
         warn "$_ is not defined";
         pod2usage(1);
@@ -44,18 +45,34 @@ my $fok = OPN::Fok::UA->new(
     url      => $config->url,
 );
 
-my $method = $config->type;
-# TODO: Check if the method is in types-list.
+if ($config->get('list-types')) {
+    print "You can use the following types: $/";
 
-if (!$fok->can($method)) {
-    die "Unable to perform $method";
+    my @types = @{$fok->types};
+    foreach (@types) {
+        print "*\t$_", $/;
+    }
+}
+elsif (my $method = $config->type) {
+    $method = "parse_$method";
+
+    if (!$fok->can($method)) {
+        die "Unable to perform $method";
+    }
+
+    # Fucking cookie wall
+    # <input type="hidden" name="token" value="02ee2897184d45edbf09fc4c5cd7b143">
+    # <input type="hidden" name="allowcookies" value="ACCEPTEER ALLE COOKIES">
+    $fok->cookie_wall_ok();
+
+    my $x = $fok->login;
+    #die Dumper $x;
+
+    my $res = $fok->$method($config->id);
+    print STDERR Dumper $res;
 }
 
-my $x = $fok->login;
 
-die Dumper $x;
-
-$fok->$method;
 
 __END__
 

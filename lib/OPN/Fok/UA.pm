@@ -27,6 +27,22 @@ has ua => (
     },
 );
 
+has mapping => (
+    is => 'ro',
+    isa => 'HashRef',
+    default => sub {
+        my $self = shift;
+        return { map { $_ => "parse_$_" } qw(forum forum_index) };
+    },
+    lazy => 1,
+);
+
+has types => (
+    is => 'ro',
+    isa => 'ArrayRef',
+    default => sub { my $self = shift; return [sort keys $self->mapping] }
+);
+
 has cookie_jar => (
     is      => 'ro',
     isa     => 'HTTP::Cookies',
@@ -131,10 +147,10 @@ sub _get_session_information_from_page {
     my $ids = { sessid => '', sid => '' };
 
     foreach my $input ($builder->look_down('_tag', 'input')) {
-        if ($input->attr('name') eq 'sessid') {
+        if ($input->attr('name') // '' eq 'sessid') {
             $ids->{sessid} = $input->attr('value');
         }
-        if ($input->attr('name') eq 'sid') {
+        if ($input->attr('name') // '' eq 'sid') {
             $ids->{sid} = $input->attr('value');
         }
     }
