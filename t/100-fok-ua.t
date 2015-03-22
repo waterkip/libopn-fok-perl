@@ -3,18 +3,16 @@ use Test::Exception;
 use Test::LWP::UserAgent;
 use autodie;
 
-use OPN::Fok::UA;
+use File::Slurp qw(read_file);
+use File::Spec::Functions qw(catfile);
+use HTML::Entities;
 use HTTP::Request;
 use HTTP::Response;
-use HTML::Entities;
-use File::Spec::Functions qw(catfile);
+use OPN::Fok::UA;
 
 sub open_html_files {
     my $file = shift;
-    open my $fh, '<', catfile(qw(t data html), $file);
-    my $contents;
-    local $/;
-    return <$fh>;
+    return scalar read_file(catfile(qw(t data html), $file));
 }
 
 my $ua = Test::LWP::UserAgent->new(agent => 'test');
@@ -146,6 +144,7 @@ subtest parse_forum => sub {
         },
         "Sticky huisregels gevonden"
     );
+    diag explain $data;
 };
 
 #
